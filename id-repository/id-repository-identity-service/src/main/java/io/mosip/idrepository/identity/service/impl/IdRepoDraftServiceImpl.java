@@ -238,6 +238,10 @@ public class IdRepoDraftServiceImpl extends IdRepoServiceImpl implements IdRepoD
 			Optional<UinDraft> uinDraft = uinDraftRepo.findByRegId(registrationId);
 			if (uinDraft.isPresent()) {
 				UinDraft draftToUpdate = uinDraft.get();
+				if (Objects.nonNull(request.getStatus())
+						&& !org.apache.commons.lang3.StringUtils.equals(draftToUpdate.getStatusCode(), request.getStatus())) {
+					draftToUpdate.setStatusCode(request.getStatus());
+				}
 				if (Objects.isNull(draftToUpdate.getUinData())) {
 					ObjectNode identityObject = mapper.convertValue(request.getIdentity(), ObjectNode.class);
 					identityObject.putPOJO(VERIFIED_ATTRIBUTES, request.getVerifiedAttributes());
