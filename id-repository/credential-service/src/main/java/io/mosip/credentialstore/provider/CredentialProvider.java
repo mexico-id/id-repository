@@ -663,6 +663,7 @@ public class CredentialProvider {
 	private JSONArray formatData(JSONObject identity, String formatAttrName, List<String> identityAttributesList, List<Filter> filter)
 			throws Exception {
 		String formattedData = "";
+		LOGGER.info("Format attribute name: {}", formatAttrName);
 		if (identityAttributesList == null || identityAttributesList.isEmpty()) {
 			if (formatAttrName.equals(CredentialConstants.NAME)) {
 				identityAttributesList = getNameAttributes();
@@ -775,6 +776,7 @@ public class CredentialProvider {
 		if (identity.get(attribute) == null) {
 			return;
 		}
+		LOGGER.info("Attribute: {}", attribute);
 		JSONArray node = JsonUtil.getJSONArray(identity, attribute);
 		if (node != null) {
 			JsonValue[] jsonValues = JsonUtil.mapJsonNodeToJavaObject(JsonValue.class, node);
