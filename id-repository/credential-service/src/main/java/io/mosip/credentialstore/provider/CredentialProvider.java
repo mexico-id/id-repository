@@ -776,8 +776,10 @@ public class CredentialProvider {
 		if (identity.get(attribute) == null) {
 			return;
 		}
+		LOGGER.info("Identity Object: {}", identity.get(attribute));
 		LOGGER.info("Attribute: {}", attribute);
 		JSONArray node = JsonUtil.getJSONArray(identity, attribute);
+		LOGGER.info("Node: {}", node);
 		if (node != null) {
 			JsonValue[] jsonValues = JsonUtil.mapJsonNodeToJavaObject(JsonValue.class, node);
 			for (JsonValue jsonValue : jsonValues) {
