@@ -635,7 +635,10 @@ public class CredentialProvider {
 		String userSpecifiedAttributeFormat = userReqFormatingAttributes == null? null : (String) userReqFormatingAttributes.get(attribute);
 		String attributeFormat = userSpecifiedAttributeFormat != null ? userSpecifiedAttributeFormat
 				: key.getFormat();
-
+		if (CredentialConstants.CURPID.equalsIgnoreCase(attribute)
+				|| CredentialConstants.SELECTED_HANDLES.equalsIgnoreCase(attribute)) {
+			return null;
+		}
 		if (attribute.equals(CredentialConstants.DATEOFBIRTH)) {
 			if(attributeFormat!=null) {
 				formattedObject = formatDate(identity.get(CredentialConstants.DATEOFBIRTH), attributeFormat);

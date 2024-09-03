@@ -79,6 +79,6 @@ public class CredentialConstants {
 	public static final String CREDENTIAL_PHOTO_ATTRIBUTE_NAMES = "mosip.credential.photo.attribute.names";
 	public static final String CREDENTIAL_NAME_ATTRIBUTE_NAMES = "mosip.credential.name.attribute.names";
 	public static final String CREDENTIAL_ADDRESS_ATTRIBUTE_NAMES = "mosip.credential.address.attribute.names";
-
-	
+	public static final String SELECTED_HANDLES = "selectedHandles";
+	public static final String CURPID = "curpId";
 }
