@@ -171,7 +171,7 @@ public class IdRepoServiceHelper {
 				return selectedHandleFieldIds.stream()
 						.filter(handleFieldId -> supportedHandlesInSchema.get(schemaVersion).contains(handleFieldId))
 						.collect(Collectors.toMap(handleName -> handleName,
-                                handleFieldId -> buildHandleDto(identityMap.get(handleFieldId), handleFieldId)));
+                                handleFieldId -> buildHandleDto((identityMap.get(handleFieldId) instanceof String) ? Arrays.asList(((String) identityMap.get(handleFieldId)).split(",")) : identityMap.get(handleFieldId), handleFieldId)));
 			} else if (existingSelectedHandlesMap != null && !existingSelectedHandlesMap.isEmpty()) {
                 Set<String> existingSelectedHandleKeys = existingSelectedHandlesMap.keySet();
 				return existingSelectedHandleKeys.stream()
@@ -187,7 +187,7 @@ public class IdRepoServiceHelper {
 							return false;
 						})
 						.collect(Collectors.toMap(handleName -> handleName,
-                                handleFieldId -> buildHandleDto(identityMap.get(handleFieldId), handleFieldId)));
+                                handleFieldId -> buildHandleDto((identityMap.get(handleFieldId) instanceof String) ? Arrays.asList(((String) identityMap.get(handleFieldId)).split(",")) : identityMap.get(handleFieldId), handleFieldId)));
 			}
 		}
 		return null;
