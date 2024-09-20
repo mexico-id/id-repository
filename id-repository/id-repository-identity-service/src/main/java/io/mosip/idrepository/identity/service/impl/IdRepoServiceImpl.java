@@ -1058,6 +1058,7 @@ public class IdRepoServiceImpl<T> implements IdRepoService<IdRequestDTO<T>, Uin>
 
 		for (Entry<String, List<HandleDto>> entry : handles.entrySet()) {
 			for(HandleDto handleDto : entry.getValue()) {
+				mosipLogger.info("addIdentityHandle - Key : {}", entry.getKey());
 				int saltId = securityManager.getSaltKeyForHashOfId(handleDto.getHandle());
 				String encryptSalt = uinEncryptSaltRepo.retrieveSaltById(saltId);
 				String handleToEncrypt = saltId + SPLITTER + handleDto.getHandle() + SPLITTER + encryptSalt;
@@ -1092,46 +1093,52 @@ public class IdRepoServiceImpl<T> implements IdRepoService<IdRequestDTO<T>, Uin>
 		existingIdentityRequestDto.setIdentity(identityObject);
 		Map<String, List<HandleDto>> existingSelectedHandlesMap = idRepoServiceHelper
 				.getSelectedHandles(existingIdentityRequestDto, null);
+		try {
+			mosipLogger.info("existingSelectedHandlesMap : {}", mapper.writeValueAsString(existingSelectedHandlesMap));
+			//		new handles
+			Map<String, List<HandleDto>> inputSelectedHandlesMap = checkAndGetHandles(inputRequestDto, uinObject.getUinHash(),
+					existingSelectedHandlesMap, method);
+			//		if 'inputSelectedHandlesMap' comes as empty map then we should revoke all existing handles
+			//		by updating the handle status as 'DELETE'.
+			mosipLogger.info("inputSelectedHandlesMap : {}", mapper.writeValueAsString(inputSelectedHandlesMap));
+			if (existingSelectedHandlesMap == null)
+				return inputSelectedHandlesMap;
 
-//		new handles
-		Map<String, List<HandleDto>> inputSelectedHandlesMap = checkAndGetHandles(inputRequestDto, uinObject.getUinHash(),
-				existingSelectedHandlesMap, method);
-//		if 'inputSelectedHandlesMap' comes as empty map then we should revoke all existing handles
-//		by updating the handle status as 'DELETE'.
+			List<String> handleHashesToBeDeleted = new ArrayList<>();
+			for (Entry<String, List<HandleDto>> existingEntry : existingSelectedHandlesMap.entrySet()) {
+				for (HandleDto existingHandleDto : existingEntry.getValue()) {
+					//if same handle hash present in "inputSelectedHandlesMap" then
+					//remove from "inputSelectedHandlesMap" otherwise update handle status as 'DELETE'.
+					if (inputSelectedHandlesMap != null && inputSelectedHandlesMap.containsKey(existingEntry.getKey())) {
+						Optional<HandleDto> result = inputSelectedHandlesMap.get(existingEntry.getKey())
+								.stream()
+								.filter(newDto -> newDto.getHandleHash().equals(existingHandleDto.getHandleHash()))
+								.findFirst();
 
-		if (existingSelectedHandlesMap == null)
-			return inputSelectedHandlesMap;
+						//if the existing handle hash is not present in the new map, then it entry should be "DELETED"
+						if (result.isEmpty()) {
+							handleHashesToBeDeleted.add(existingHandleDto.getHandleHash());
+						} else {
+							//handle already exists with the same hash
+							inputSelectedHandlesMap.get(existingEntry.getKey()).remove(result.get());
+						}
 
-		List<String> handleHashesToBeDeleted = new ArrayList<>();
-		for (Entry<String, List<HandleDto>> existingEntry : existingSelectedHandlesMap.entrySet()) {
-			for(HandleDto existingHandleDto : existingEntry.getValue()) {
-				//if same handle hash present in "inputSelectedHandlesMap" then
-				//remove from "inputSelectedHandlesMap" otherwise update handle status as 'DELETE'.
-				if (inputSelectedHandlesMap != null && inputSelectedHandlesMap.containsKey(existingEntry.getKey())) {
-					Optional<HandleDto> result = inputSelectedHandlesMap.get(existingEntry.getKey())
-							.stream()
-							.filter( newDto -> newDto.getHandleHash().equals(existingHandleDto.getHandleHash()) )
-							.findFirst();
-
-					//if the existing handle hash is not present in the new map, then it entry should be "DELETED"
-					if(result.isEmpty()) { handleHashesToBeDeleted.add(existingHandleDto.getHandleHash()); }
-					else {
-						//handle already exists with the same hash
-						inputSelectedHandlesMap.get(existingEntry.getKey()).remove(result.get());
+					} else {
+						handleHashesToBeDeleted.add(existingHandleDto.getHandleHash());
 					}
-
-				} else {
-					handleHashesToBeDeleted.add(existingHandleDto.getHandleHash());
 				}
 			}
+			mosipLogger.info("handleHashesToBeDeleted : {}", mapper.writeValueAsString(handleHashesToBeDeleted));
+			for (String handleHash : handleHashesToBeDeleted) {
+				//Update the handle status as 'DELETE' in the "mosip_idrepo.handle" table
+				//and will delete the record after getting an acknowledgement from IDA.
+				handleRepo.updateStatusByHandleHash(handleHash, DELETE.name());
+				mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "getNewAndDeleteExistingHandles", "Record successfully updated in db");
+			}
+			return inputSelectedHandlesMap;
+		} catch (Exception e) {
+			mosipLogger.error("Parsing error in getNewAndDeleteExistingHandles:", e);
 		}
-
-		for(String handleHash : handleHashesToBeDeleted) {
-			//Update the handle status as 'DELETE' in the "mosip_idrepo.handle" table
-			//and will delete the record after getting an acknowledgement from IDA.
-			handleRepo.updateStatusByHandleHash(handleHash, DELETE.name());
-			mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "getNewAndDeleteExistingHandles", "Record successfully updated in db");
-		}
-		return inputSelectedHandlesMap;
+		return null;
 	}
 }
