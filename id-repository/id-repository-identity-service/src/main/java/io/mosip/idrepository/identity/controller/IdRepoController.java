@@ -89,7 +89,7 @@ public class IdRepoController {
 
 	/** The Constant RETRIEVE_IDENTITY. */
 	private static final String RETRIEVE_IDENTITY = "retrieveIdentity";
-
+	private static final String RETRIEVE_IDENTITY_BYID = "retrieveIdentityById";
 	/** The mosip logger. */
 	Logger mosipLogger = IdRepoLogger.getLogger(IdRepoController.class);
 
@@ -179,9 +179,11 @@ public class IdRepoController {
 			@ApiResponse(responseCode = "404", description = "Not Found" ,content = @Content(schema = @Schema(hidden = true)))})
 	public ResponseEntity<IdResponseDTO<List<String>>> addIdentity(@Validated @RequestBody RequestWrapper<IdRequestDTO<List<String>>> request,
 													 @ApiIgnore Errors errors) throws IdRepoAppException {
+		mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_CONTROLLER, ADD_IDENTITY, "addIdentity API started...");
 		String regId = Optional.ofNullable(request.getRequest()).map(req -> String.valueOf(req.getRegistrationId()))
 				.orElse("null");
 		try {
+			long uinValidateStartTime = System.currentTimeMillis();
 			String uin = getUin(request.getRequest());
 			validator.validateId(request.getId(), CREATE);
 			DataValidationUtil.validate(errors);
@@ -190,6 +192,9 @@ public class IdRepoController {
 				throw new IdRepoAppException(INVALID_INPUT_PARAMETER.getErrorCode(),
 						String.format(INVALID_INPUT_PARAMETER.getErrorMessage(), UIN));
 			}
+			mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_CONTROLLER, ADD_IDENTITY,
+					"Total time taken to validate UIN -  (" + (System.currentTimeMillis() - uinValidateStartTime) + "ms)");
+
 			IdResponseDTO<List<String>> responseDto = idRepoService.addIdentity(request.getRequest(), uin);
 			return new ResponseEntity<>(responseDto, HttpStatus.OK);
 		} catch (IdRepoDataValidationException e) {
@@ -312,6 +317,7 @@ public class IdRepoController {
 	public ResponseEntity<IdResponseDTO<?>> retrieveIdentityById(@Validated @RequestBody RequestWrapper<IdRequestByIdDTO> request,
 														   @ApiIgnore Errors errors) throws IdRepoAppException {
 		try {
+			mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_CONTROLLER, RETRIEVE_IDENTITY_BYID, "IdRepo retrieveIdentityById request:" + request.getRequest().toString());
 			return new ResponseEntity<>(getIdentity(request.getRequest().getId(), request.getRequest().getType(),
 					request.getRequest().getIdType(), request.getRequest().getFingerExtractionFormat(), request.getRequest().getIrisExtractionFormat(),
 					request.getRequest().getFaceExtractionFormat()), HttpStatus.OK);
@@ -656,7 +662,9 @@ public class IdRepoController {
 		}
 		extractionFormats.remove(null);
 		validator.validateTypeAndExtractionFormats(type, extractionFormats);
-		return idRepoService.retrieveIdentity(individualId, Objects.isNull(idType) ? getIdType(individualId) : validator.validateIdType(idType),
+		IdResponseDTO responseDTO = idRepoService.retrieveIdentity(individualId, Objects.isNull(idType) ? getIdType(individualId) : validator.validateIdType(idType),
 				type, extractionFormats);
+		mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_CONTROLLER, RETRIEVE_IDENTITY_BYID, "IdRepo retrieveIdentityById response:" + responseDTO.toString());
+		return responseDTO;
 	}
 }

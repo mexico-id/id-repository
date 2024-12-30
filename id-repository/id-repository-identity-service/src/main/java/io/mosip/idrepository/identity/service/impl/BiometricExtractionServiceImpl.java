@@ -67,7 +67,7 @@ public class BiometricExtractionServiceImpl implements BiometricExtractionServic
 	 * @return the completable future
 	 * @throws IdRepoAppException the id repo app exception
 	 */
-	@Async
+	@Async("withSecurityContext")
 	public CompletableFuture<List<BIR>> extractTemplate(String uinHash, String fileName,
 			String extractionType, String extractionFormat, List<BIR> birsForModality) throws IdRepoAppException {
 		try {
@@ -88,7 +88,10 @@ public class BiometricExtractionServiceImpl implements BiometricExtractionServic
 			mosipLogger.info(IdRepoSecurityManager.getUser(), this.getClass().getSimpleName(), EXTRACT_TEMPLATE,
 					"EXTRATCING BIOMETRICS FOR FORMAT: " + extractionType +" : "+ extractionFormat);
 			Map<String, String> formatFlag = Map.of(getFormatFlag(extractionType), extractionFormat);
+			long startTime = System.currentTimeMillis();
 			List<BIR> extractedBiometrics = extractBiometricTemplate(formatFlag, birsForModality);
+			mosipLogger.info(IdRepoSecurityManager.getUser(), this.getClass().getSimpleName(), EXTRACT_TEMPLATE,
+					"Time taken for extractBiometricTemplate: " + (System.currentTimeMillis() - startTime) + " ms");
 			if (!extractedBiometrics.isEmpty()) {
 				objectStoreHelper.putBiometricObject(uinHash, extractionFileName, cbeffUtil.createXML(extractedBiometrics));
 			}

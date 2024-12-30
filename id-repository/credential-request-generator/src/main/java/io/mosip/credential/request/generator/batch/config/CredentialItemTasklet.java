@@ -8,6 +8,7 @@ import java.util.concurrent.ForkJoinPool;
 
 import javax.annotation.PostConstruct;
 
+import io.mosip.credential.request.generator.helper.CredentialIssueRequestHelper;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
@@ -58,6 +59,9 @@ public class CredentialItemTasklet implements Tasklet {
 	@Autowired
 	private CredentialDao credentialDao;
 
+	@Autowired
+	private CredentialIssueRequestHelper credentialIssueRequestHelper;
+
 	/** The Constant LOGGER. */
 	private static final Logger LOGGER = IdRepoLogger.getLogger(CredentialItemTasklet.class);
 	
@@ -77,6 +81,7 @@ public class CredentialItemTasklet implements Tasklet {
 
 	@Override
 	public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
+		long startTime = System.currentTimeMillis();
 		String batchId = UUID.randomUUID().toString();
 		LOGGER.info(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
 				"Inside CredentialItemTasklet.execute() method");
@@ -87,27 +92,26 @@ public class CredentialItemTasklet implements Tasklet {
 				TrimExceptionMessage trimMessage = new TrimExceptionMessage();
 				int retryCount = 0;
 				try {
+					long itemStartTime = System.currentTimeMillis();
 					LOGGER.info(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
 							"started processing item : " + credential.getRequestId());
-					CredentialIssueRequestDto credentialIssueRequestDto = mapper.readValue(credential.getRequest(), CredentialIssueRequestDto.class);
-					CredentialServiceRequestDto credentialServiceRequestDto = new CredentialServiceRequestDto();
-					credentialServiceRequestDto.setCredentialType(credentialIssueRequestDto.getCredentialType());
-					credentialServiceRequestDto.setId(credentialIssueRequestDto.getId());
-					credentialServiceRequestDto.setIssuer(credentialIssueRequestDto.getIssuer());
-					credentialServiceRequestDto.setRecepiant(credentialIssueRequestDto.getIssuer());
-					credentialServiceRequestDto.setSharableAttributes(credentialIssueRequestDto.getSharableAttributes());
-					credentialServiceRequestDto.setUser(credentialIssueRequestDto.getUser());
-					credentialServiceRequestDto.setRequestId(credential.getRequestId());
-					credentialServiceRequestDto.setEncrypt(credentialIssueRequestDto.isEncrypt());
-					credentialServiceRequestDto.setEncryptionKey(credentialIssueRequestDto.getEncryptionKey());
-					credentialServiceRequestDto.setAdditionalData(credentialIssueRequestDto.getAdditionalData());
+					CredentialIssueRequestDto credentialIssueRequestDto = credentialIssueRequestHelper.getCredentialIssueRequestDto(credential);
+					long decryptEndTime = System.currentTimeMillis();
+					LOGGER.info(IdRepoSecurityManager.getUser(), "Perform" + CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
+							credential.getRequestId() + "Time taken to decrypt : " + (decryptEndTime - itemStartTime) + " ms");
+
+					CredentialServiceRequestDto credentialServiceRequestDto = credentialIssueRequestHelper.getCredentialServiceRequestDto(credentialIssueRequestDto,
+							credential.getRequestId());
+					credential.setRequest(mapper.writeValueAsString(credentialIssueRequestDto));
 
 					LOGGER.info(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
 							"Calling CRDENTIALSERVICE : " + credential.getRequestId());
 
 					String responseString = restUtil.postApi(ApiName.CRDENTIALSERVICE, null, "", "",
 							MediaType.APPLICATION_JSON, credentialServiceRequestDto, String.class);
-
+					long credEndTime = System.currentTimeMillis();
+					LOGGER.info(IdRepoSecurityManager.getUser(), "Perform" + CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
+							credential.getRequestId() + "Time taken to finish Credential service call : " + (credEndTime - decryptEndTime) + " ms");
 					LOGGER.info(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
 							"Received response from CRDENTIALSERVICE : " + credential.getRequestId());
 
@@ -140,6 +144,9 @@ public class CredentialItemTasklet implements Tasklet {
 					}
 					LOGGER.info(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
 							"ended processing item : " + credential.getRequestId());
+					long itemEndTime = System.currentTimeMillis();
+					LOGGER.debug(IdRepoSecurityManager.getUser(), "Perform" + CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
+							"Time taken to complete an item (" + (itemEndTime - itemStartTime) + "ms)");
 				} catch (ApiNotAccessibleException e) {
 
 					LOGGER.error(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
@@ -173,6 +180,10 @@ public class CredentialItemTasklet implements Tasklet {
 					retryCount = credential.getRetryCount() != null ? credential.getRetryCount() + 1 : 1;
 				}
 			})).get();
+			long endTime = System.currentTimeMillis();
+			LOGGER.debug(IdRepoSecurityManager.getUser(), "Perform" + CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
+					"Total time taken to complete process of " + credentialEntities.size() + " records (" + (endTime - startTime) + "ms)");
+
 		} catch (InterruptedException e) {
 			LOGGER.error(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
 					ExceptionUtils.getStackTrace(e));
@@ -181,9 +192,12 @@ public class CredentialItemTasklet implements Tasklet {
 			LOGGER.error(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
 						ExceptionUtils.getStackTrace(e));
 		}
-		if (!CollectionUtils.isEmpty(credentialEntities))
+		if (!CollectionUtils.isEmpty(credentialEntities)) {
 			credentialDao.update(batchId, credentialEntities);
-
+			long endTime = System.currentTimeMillis();
+			LOGGER.debug(IdRepoSecurityManager.getUser(), CREDENTIAL_ITEM_TASKLET, "batchid = " + batchId,
+					"Total time taken to complete till update of " + credentialEntities.size() + " records (" + (endTime - startTime) + "ms)");
+		}
 		return RepeatStatus.FINISHED;
 	}
 }

@@ -336,26 +336,38 @@ public class IdRepoServiceImpl<T> implements IdRepoService<IdRequestDTO<T>, Uin>
 				.getUUID(UUIDUtils.NAMESPACE_OID,
 						docType.get(FILE_NAME_ATTRIBUTE).asText() + SPLITTER + DateUtils.getUTCCurrentDateTime())
 				.toString() + DOT + docType.get(FILE_FORMAT_ATTRIBUTE).asText();
-
+		long decodeStartTime = System.currentTimeMillis();
 		data = CryptoUtil.decodeURLSafeBase64(doc.getValue());
+		mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "addBiometricDocuments",
+				"Total time taken to decode CBEFF " + uinRefId + " (" + (System.currentTimeMillis() - decodeStartTime) + "ms)");
 		try {
+			decodeStartTime = System.currentTimeMillis();
 			cbeffUtil.validateXML(data);
+			mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "addBiometricDocuments",
+					"Total time taken to validate CBEFF " + uinRefId + " (" + (System.currentTimeMillis() - decodeStartTime) + "ms)");
 		} catch (Exception e) {
 			mosipLogger.error(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "addBiometricDocuments", e.getMessage());
 			throw new IdRepoAppUncheckedException(INVALID_INPUT_PARAMETER.getErrorCode(),
 					String.format(INVALID_INPUT_PARAMETER.getErrorMessage(), "documents/" + index + "/value"), e);
 		}
+		long s3StartTime = System.currentTimeMillis();
 		objectStoreHelper.putBiometricObject(uinHash, fileRefId, data);
-
+		mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "addBiometricDocuments",
+				"Total time taken to put biometric data into S3 " + uinRefId + " (" + (System.currentTimeMillis() - s3StartTime) + "ms)");
 		bioList.add(new UinBiometric(uinRefId, fileRefId, doc.getCategory(), docType.get(FILE_NAME_ATTRIBUTE).asText(),
 				securityManager.hash(data), "", IdRepoSecurityManager.getUser(),
 				DateUtils.getUTCCurrentDateTime(), null, null, false, null));
 
-		if (!isDraft)
+		if (!isDraft) {
+			long hRepoStartTime = System.currentTimeMillis();
 			uinBioHRepo.save(new UinBiometricHistory(uinRefId, DateUtils.getUTCCurrentDateTime(), fileRefId, doc.getCategory(),
 					docType.get(FILE_NAME_ATTRIBUTE).asText(), securityManager.hash(doc.getValue().getBytes()),
 					"", IdRepoSecurityManager.getUser(), DateUtils.getUTCCurrentDateTime(),
 					null, null, false, null));
+			mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "addBiometricDocuments",
+					"Total time taken to save biometric data into DB " + uinRefId + " (" + (System.currentTimeMillis() - hRepoStartTime) + "ms)");
+		}
+
 	}
 
 	/**
@@ -374,21 +386,31 @@ public class IdRepoServiceImpl<T> implements IdRepoService<IdRequestDTO<T>, Uin>
 				.getUUID(UUIDUtils.NAMESPACE_OID,
 						docType.get(FILE_NAME_ATTRIBUTE).asText() + SPLITTER + DateUtils.getUTCCurrentDateTime())
 				.toString() + DOT + docType.get(FILE_FORMAT_ATTRIBUTE).asText();
-
+		long decodeStartTime = System.currentTimeMillis();
 		byte[] data = CryptoUtil.decodeURLSafeBase64(doc.getValue());
+		mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "addDemographicDocuments",
+				"Total time taken to decode demographic doc into DB " + uinRefId + " (" + (System.currentTimeMillis() - decodeStartTime) + "ms)");
+
+		long s3StartTime = System.currentTimeMillis();
 		objectStoreHelper.putDemographicObject(uinHash, fileRefId, data);
+		mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "addDemographicDocuments",
+				"Total time taken to put demographic doc into S3 " + uinRefId + " (" + (System.currentTimeMillis() - s3StartTime) + "ms)");
 
 		docList.add(new UinDocument(uinRefId, doc.getCategory(), docType.get(TYPE).asText(), fileRefId,
 				docType.get(FILE_NAME_ATTRIBUTE).asText(), docType.get(FILE_FORMAT_ATTRIBUTE).asText(),
 				securityManager.hash(data), "", IdRepoSecurityManager.getUser(),
 				DateUtils.getUTCCurrentDateTime(), null, null, false, null));
 
-		if (!isDraft)
+		if (!isDraft) {
+			long hStartTime = System.currentTimeMillis();
 			uinDocHRepo.save(new UinDocumentHistory(uinRefId, DateUtils.getUTCCurrentDateTime(), doc.getCategory(),
 					docType.get(TYPE).asText(), fileRefId, docType.get(FILE_NAME_ATTRIBUTE).asText(),
 					docType.get(FILE_FORMAT_ATTRIBUTE).asText(), securityManager.hash(data),
 					"", IdRepoSecurityManager.getUser(), DateUtils.getUTCCurrentDateTime(),
 					null, null, false, null));
+			mosipLogger.debug(IdRepoSecurityManager.getUser(), ID_REPO_SERVICE_IMPL, "addDemographicDocuments",
+					"Total time taken to save demographic doc into DB " + uinRefId + " (" + (System.currentTimeMillis() - hStartTime) + "ms)");
+		}
 	}
 
 	/*
