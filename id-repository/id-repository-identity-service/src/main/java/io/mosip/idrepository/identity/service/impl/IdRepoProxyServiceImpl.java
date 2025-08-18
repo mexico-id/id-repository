@@ -1,5 +1,6 @@
 package io.mosip.idrepository.identity.service.impl;
 
+import static io.mosip.idrepository.core.constant.HandleStatusLifecycle.ACTIVATED;
 import static io.mosip.idrepository.core.constant.IdRepoConstants.*;
 import static io.mosip.idrepository.core.constant.IdRepoErrorConstants.BIO_EXTRACTION_ERROR;
 import static io.mosip.idrepository.core.constant.IdRepoErrorConstants.DATABASE_ACCESS_ERROR;
@@ -18,6 +19,7 @@ import javax.annotation.Resource;
 
 import io.mosip.idrepository.core.constant.*;
 import io.mosip.idrepository.core.dto.*;
+import io.mosip.idrepository.core.entity.Handle;
 import io.mosip.idrepository.identity.helper.IdRepoServiceHelper;
 import io.mosip.idrepository.core.repository.HandleRepo;
 import io.mosip.kernel.core.util.DateUtils;
@@ -736,9 +738,14 @@ public class IdRepoProxyServiceImpl<T> implements IdRepoService<IdRequestDTO<T>,
 			throws IdRepoAppException {
 		try {
 			String handleHash = idRepoServiceHelper.getHandleHash(handle);
-			String uinHash = handleRepo.findUinHashByHandleHash(handleHash);
-			if (Objects.nonNull(uinHash)) {
-				return retrieveIdentityByUinHash(type, uinHash, extractionFormats);
+			Optional<Handle> handleEntityOpt  = handleRepo.findByHandleHash(handleHash);
+			if (handleEntityOpt.isPresent()) {
+				Handle handleEntity = handleEntityOpt.get();
+				if (HandleStatusLifecycle.ACTIVATED.name().equals(handleEntity.getStatus())) {
+					return retrieveIdentityByUinHash(type, handleEntity.getUinHash(), extractionFormats);
+				} else {
+					throw new IdRepoAppException("HANDLE_STATUS_NOT_ACTIVE", "Handle is not active");
+				}
 			} else {
 				throw new IdRepoAppException(NO_RECORD_FOUND);
 			}
