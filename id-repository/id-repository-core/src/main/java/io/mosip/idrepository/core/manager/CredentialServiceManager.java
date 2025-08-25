@@ -277,9 +277,23 @@ public class CredentialServiceManager {
 		if (handles != null && !handles.isEmpty()) {
 			mosipLogger.debug(IdRepoSecurityManager.getUser(), this.getClass().getCanonicalName(), "sendUINEventToIDA",
 					"Number of handles identified >> " + handles.size());
+//			List<EventModel> handleEvents = handles.stream()
+//					.flatMap(handle -> createIdaEventModel(eventType, null, null, partnerIds,
+//							null, handle.getHandleHash()))
+//					.collect(Collectors.toList());
 			List<EventModel> handleEvents = handles.stream()
-					.flatMap(handle -> createIdaEventModel(eventType, null, null, partnerIds,
-							null, handle.getHandleHash()))
+					.flatMap(handle -> {
+						try {
+							return createIdaEventModel(
+									eventType, null, null, partnerIds, null,
+									buildHandlHash(handle, uinHashSaltRepo::retrieveSaltById)
+							);
+						} catch (IdRepoAppException e) {
+							mosipLogger.error(IdRepoSecurityManager.getUser(), SEND_REQUEST_TO_CRED_SERVICE,
+									"getHandlesInfo", "Failed to build handle hash due to " + e.getMessage());
+							return Stream.empty();
+						}
+					})
 					.collect(Collectors.toList());
 			eventList.addAll(handleEvents);
 			handleRepo.updateStatusByUinHash(uinHash, HandleStatusLifecycle.DELETE_REQUESTED.name());
@@ -645,8 +659,15 @@ public class CredentialServiceManager {
 								"getHandlesInfo", "\n *****Failed to decrypt handle due to " + e.getMessage());
 					}
 				} else if (HandleStatusLifecycle.DELETE.name().equals(entity.getStatus())) {
-					eventList.addAll(createIdaEventModel(IDAEventType.REMOVE_ID, null, null, partnerIds, null,
-							entity.getHandleHash()).collect(Collectors.toList()));
+//					eventList.addAll(createIdaEventModel(IDAEventType.REMOVE_ID, null, null, partnerIds, null,
+//							entity.getHandleHash()).collect(Collectors.toList()));
+					try {
+						eventList.addAll(createIdaEventModel(IDAEventType.REMOVE_ID, null, null, partnerIds, null,
+								buildHandlHash(entity, saltRetreivalFunction)).collect(Collectors.toList()));
+					} catch (IdRepoAppException e) {
+						mosipLogger.error(IdRepoSecurityManager.getUser(), SEND_REQUEST_TO_CRED_SERVICE,
+								"getHandlesInfo", "Failed to build handle hash due to " + e.getMessage());
+					}
 				}
 			}
 			if (!eventList.isEmpty()) {
@@ -672,5 +693,16 @@ public class CredentialServiceManager {
 				.getIdHashAndAttributesWithSaltModuloByPlainIdHash(handleInfoDTO.getHandle(), saltRetreivalFunction));
 		handleInfoDTO.getAdditionalData().put("idType", IdType.HANDLE.getIdType());
 		return handleInfoDTO;
+	}
+	private String buildHandlHash(Handle entity, IntFunction<String> saltRetreivalFunction)
+			throws IdRepoAppException {
+		String encryptSalt = uinEncryptSaltRepo.retrieveSaltById(
+				Integer.valueOf(io.mosip.kernel.core.util.StringUtils.substringBefore(entity.getHandle(), SPLITTER)));
+		String handle = new String(securityManager.decryptWithSalt(
+				CryptoUtil.decodeURLSafeBase64(
+						io.mosip.kernel.core.util.StringUtils.substringAfter(entity.getHandle(), SPLITTER)),
+				CryptoUtil.decodePlainBase64(encryptSalt), uinRefId));
+		return securityManager.getIdHashWithSalt(handle, saltRetreivalFunction);
+
 	}
 }
