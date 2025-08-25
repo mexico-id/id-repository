@@ -347,4 +347,13 @@ public class IdRepoSecurityManager {
 		Integer saltKeyLength = EnvUtil.getIdrepoSaltKeyLength();
 		return SaltUtil.getIdvidHashModulo(id, saltKeyLength);
 	}
+	public String getIdHashWithSalt(String id, IntFunction<String> saltRetreivalFunction) {
+		return getIdHash(id, saltRetreivalFunction, this::getSaltKeyForHashOfId);
+	}
+	public String getIdHash( String id, IntFunction<String> saltRetreivalFunction, ToIntFunction<String> saltIdFunction){
+		int saltId = saltIdFunction.applyAsInt(id);
+		String hashSalt = saltRetreivalFunction.apply(saltId);
+		String idhash = hashwithSalt(id.getBytes(), hashSalt.getBytes());
+		return idhash;
+	}
 }
